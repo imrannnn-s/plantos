@@ -2,15 +2,21 @@
    SMART PLANT WATERING DASHBOARD - CORE JAVASCRIPT
    ========================================================================== */
 
-// ThingSpeak Channel Configuration
-const channelID = "3405942";
-const readAPIKey = "N702IBQAT82VAAJ8";
+// ThingSpeak Channel Configuration (Load from localStorage if present)
+let channelID = localStorage.getItem('ts_channel_id') || "3405942";
+let readAPIKey = localStorage.getItem('ts_read_api_key') || "N702IBQAT82VAAJ8";
+let writeAPIKey = localStorage.getItem('ts_write_api_key') || "";
 
-const latestUrl = `https://api.thingspeak.com/channels/${channelID}/feeds/last.json?api_key=${readAPIKey}`;
-const historyUrl = `https://api.thingspeak.com/channels/${channelID}/feeds.json?api_key=${readAPIKey}&results=60`;
+let latestUrl = `https://api.thingspeak.com/channels/${channelID}/feeds/last.json?api_key=${readAPIKey}`;
+let historyUrl = `https://api.thingspeak.com/channels/${channelID}/feeds.json?api_key=${readAPIKey}&results=60`;
+
+function updateUrls() {
+    latestUrl = `https://api.thingspeak.com/channels/${channelID}/feeds/last.json?api_key=${readAPIKey}`;
+    historyUrl = `https://api.thingspeak.com/channels/${channelID}/feeds.json?api_key=${readAPIKey}&results=60`;
+}
 
 // State Variables
-let isDemoMode = (channelID === "YOUR_CHANNEL_ID" || readAPIKey === "YOUR_READ_API_KEY");
+let isDemoMode = (channelID === "YOUR_CHANNEL_ID" || readAPIKey === "YOUR_READ_API_KEY" || channelID === "");
 let isAutoMode = true;
 let moistureThreshold = 45;
 let currentPumpState = 0; // 0 = OFF, 1 = ON
@@ -52,6 +58,16 @@ let lastAlertStates = {
    ========================================================================== */
 
 window.addEventListener('DOMContentLoaded', () => {
+    // Initialize Routing and Page Switcher
+    handleRoute();
+    window.addEventListener('hashchange', handleRoute);
+
+    // Initialize Mobile Navigation and Hamburger Toggles
+    initMobileNavigation();
+
+    // Initialize Configuration Console Form
+    initConfigForm();
+
     // Initialize Lucide Icons
     lucide.createIcons();
     
@@ -774,16 +790,25 @@ function showLoading(show) {
 function updateConnectionStatus(isConnected) {
     const dot = document.getElementById('conn-dot');
     const text = document.getElementById('conn-text');
+    const mobileDot = document.getElementById('mobile-conn-dot');
+    
+    let statusClass = "status-pulse pulse-red";
+    let statusText = "Disconnected";
     
     if (isConnected === 'stale') {
-        dot.className = "status-pulse pulse-orange";
-        text.textContent = "Stale Telemetry";
+        statusClass = "status-pulse pulse-orange";
+        statusText = "Stale Telemetry";
     } else if (isConnected === true || isConnected === 'connected') {
-        dot.className = "status-pulse pulse-green";
-        text.textContent = isDemoMode ? "Live (Demo)" : "Connected";
-    } else {
-        dot.className = "status-pulse pulse-red";
-        text.textContent = "Disconnected";
+        statusClass = isDemoMode ? "status-pulse pulse-orange" : "status-pulse pulse-green";
+        statusText = isDemoMode ? "Live (Demo)" : "Connected";
+    }
+    
+    if (dot) dot.className = statusClass;
+    if (text) text.textContent = statusText;
+    
+    if (mobileDot) {
+        const pulseClass = statusClass.split(' ').find(cls => cls.startsWith('pulse-'));
+        mobileDot.className = `status-pulse ${pulseClass}`;
     }
 }
 
@@ -1391,5 +1416,220 @@ function updateCharts(feeds) {
             return val < 0 ? 'rgba(244, 63, 94, 0.85)' : 'rgba(16, 185, 129, 0.85)';
         });
         envCorrelationChart.update();
+    }
+}
+
+/* ==========================================================================
+   ROUTING & PAGE TRANSITION LOGIC
+   ========================================================================== */
+
+function handleRoute() {
+    const hash = window.location.hash || '#/dashboard';
+    
+    // Select all pages and navigation links
+    const pages = document.querySelectorAll('.app-page');
+    const navLinks = document.querySelectorAll('.nav-link');
+    
+    // Deactivate all pages and navigation links
+    pages.forEach(page => page.classList.remove('active-page'));
+    navLinks.forEach(link => link.classList.remove('active'));
+    
+    // Determine active page based on hash
+    let activePageId = 'page-dashboard';
+    let activeLinkId = 'nav-dashboard';
+    
+    if (hash === '#/analytics') {
+        activePageId = 'page-analytics';
+        activeLinkId = 'nav-analytics';
+    } else if (hash === '#/console') {
+        activePageId = 'page-console';
+        activeLinkId = 'nav-console';
+    }
+    
+    // Activate current page and nav link
+    const activePage = document.getElementById(activePageId);
+    const activeLink = document.getElementById(activeLinkId);
+    
+    if (activePage) {
+        activePage.classList.add('active-page');
+    }
+    if (activeLink) {
+        activeLink.classList.add('active');
+    }
+    
+    // Trigger Chart Resize / Update when page changes.
+    // Charts inside display:none elements don't get size computations, so we must resize them on switch.
+    if (hash === '#/analytics') {
+        triggerChartsResize();
+    }
+    
+    // Close mobile menu if sidebar is open
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (sidebar) {
+        sidebar.classList.remove('open');
+    }
+    if (overlay) {
+        overlay.classList.remove('active');
+    }
+}
+
+function triggerChartsResize() {
+    // Delay slightly to allow display: block transition to take effect
+    setTimeout(() => {
+        if (moistureChart) { moistureChart.resize(); moistureChart.update('none'); }
+        if (tempChart) { tempChart.resize(); tempChart.update('none'); }
+        if (humidityChart) { humidityChart.resize(); humidityChart.update('none'); }
+        if (tempHumidTrendChart) { tempHumidTrendChart.resize(); tempHumidTrendChart.update('none'); }
+        if (tempMoistureScatterChart) { tempMoistureScatterChart.resize(); tempMoistureScatterChart.update('none'); }
+        if (waterUsageChart) { waterUsageChart.resize(); waterUsageChart.update(); }
+        if (modeDistributionChart) { modeDistributionChart.resize(); modeDistributionChart.update(); }
+        if (pumpFrequencyChart) { pumpFrequencyChart.resize(); pumpFrequencyChart.update(); }
+        if (envCorrelationChart) { envCorrelationChart.resize(); envCorrelationChart.update(); }
+    }, 50);
+}
+
+/* ==========================================================================
+   MOBILE SIDEBAR DRAWER TOGGLE
+   ========================================================================== */
+
+function initMobileNavigation() {
+    const btnHamburger = document.getElementById('btn-hamburger');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    
+    if (btnHamburger && sidebar) {
+        btnHamburger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            sidebar.classList.toggle('open');
+            if (overlay) {
+                overlay.classList.toggle('active');
+            }
+        });
+        
+        // Close sidebar if clicking outside of it on mobile
+        document.addEventListener('click', (e) => {
+            if (sidebar.classList.contains('open') && !sidebar.contains(e.target) && e.target !== btnHamburger) {
+                sidebar.classList.remove('open');
+                if (overlay) {
+                    overlay.classList.remove('active');
+                }
+            }
+        });
+        
+        // Close sidebar if clicking the overlay backdrop
+        if (overlay) {
+            overlay.addEventListener('click', () => {
+                sidebar.classList.remove('open');
+                overlay.classList.remove('active');
+            });
+        }
+    }
+}
+
+/* ==========================================================================
+   CONFIG CONSOLE INPUT FORMS HANDLERS
+   ========================================================================== */
+
+function initConfigForm() {
+    const inputChanId = document.getElementById('input-channel-id');
+    const inputReadAPI = document.getElementById('input-read-api-key');
+    const inputWriteAPI = document.getElementById('input-write-api-key');
+    
+    // Populate form values
+    if (inputChanId) inputChanId.value = channelID;
+    if (inputReadAPI) inputReadAPI.value = readAPIKey;
+    if (inputWriteAPI) inputWriteAPI.value = writeAPIKey;
+    
+    // Setup toggle password visibilities
+    const setupTogglePassword = (btnId, inputId) => {
+        const btn = document.getElementById(btnId);
+        const input = document.getElementById(inputId);
+        if (btn && input) {
+            btn.addEventListener('click', () => {
+                const isPassword = input.getAttribute('type') === 'password';
+                input.setAttribute('type', isPassword ? 'text' : 'password');
+                btn.innerHTML = `<i data-lucide="${isPassword ? 'eye-off' : 'eye'}" class="eye-icon"></i>`;
+                lucide.createIcons();
+            });
+        }
+    };
+    
+    setupTogglePassword('btn-toggle-read-key', 'input-read-api-key');
+    setupTogglePassword('btn-toggle-write-key', 'input-write-api-key');
+    
+    // Save Config Action
+    const btnSave = document.getElementById('btn-save-config');
+    if (btnSave) {
+        btnSave.addEventListener('click', () => {
+            const newChanId = inputChanId.value.trim();
+            const newReadAPI = inputReadAPI.value.trim();
+            const newWriteAPI = inputWriteAPI.value.trim();
+            
+            if (!newChanId) {
+                showAlert("Configuration Error: Channel ID cannot be empty.", "danger");
+                return;
+            }
+            if (!newReadAPI) {
+                showAlert("Configuration Error: Read API Key cannot be empty.", "danger");
+                return;
+            }
+            
+            channelID = newChanId;
+            readAPIKey = newReadAPI;
+            writeAPIKey = newWriteAPI;
+            
+            localStorage.setItem('ts_channel_id', channelID);
+            localStorage.setItem('ts_read_api_key', readAPIKey);
+            localStorage.setItem('ts_write_api_key', writeAPIKey);
+            
+            updateUrls();
+            
+            // Switch off demo mode since user entered active custom credentials
+            isDemoMode = false;
+            
+            // Sync indicators in UI
+            const demoBadge = document.getElementById('demo-badge');
+            const btnToggleDemo = document.getElementById('btn-toggle-demo');
+            if (demoBadge) demoBadge.classList.add('hidden');
+            if (btnToggleDemo) {
+                btnToggleDemo.innerHTML = '<i data-lucide="monitor-play" class="inline-icon"></i> Switch to Demo';
+                lucide.createIcons();
+            }
+            
+            // Clear current communication logs & re-fetch
+            const logArea = document.getElementById('sync-console-log');
+            if (logArea) logArea.innerHTML = '';
+            
+            addSyncLog(`Config Updated: Channel ${channelID} connected successfully.`, "accent");
+            showAlert(`Saved Channel ID ${channelID} settings. Connecting...`, "success");
+            
+            triggerManualSync();
+        });
+    }
+    
+    // Reset Settings Action
+    const btnReset = document.getElementById('btn-reset-config');
+    if (btnReset) {
+        btnReset.addEventListener('click', () => {
+            channelID = "3405942";
+            readAPIKey = "N702IBQAT82VAAJ8";
+            writeAPIKey = "";
+            
+            localStorage.removeItem('ts_channel_id');
+            localStorage.removeItem('ts_read_api_key');
+            localStorage.removeItem('ts_write_api_key');
+            
+            if (inputChanId) inputChanId.value = channelID;
+            if (inputReadAPI) inputReadAPI.value = readAPIKey;
+            if (inputWriteAPI) inputWriteAPI.value = writeAPIKey;
+            
+            updateUrls();
+            
+            addSyncLog("Configuration reset to default channel.", "info");
+            showAlert("Settings reset to defaults.", "info");
+            
+            triggerManualSync();
+        });
     }
 }
