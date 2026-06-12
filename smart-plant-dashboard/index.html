@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Plant Watering System - IoT Dashboard</title>
+    
+    <!-- Meta tags for SEO -->
+    <meta name="description" content="A premium glassmorphism IoT dashboard for monitoring and controlling soil moisture, temperature, humidity, and water pump status via ESP32 and ThingSpeak.">
+    <meta name="keywords" content="IoT, ESP32, ThingSpeak, Smart Plant, Auto-Watering, Dashboard, Glassmorphism, Sensor, DHT11">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Background decorations -->
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+
+    <div class="dashboard-wrapper">
+        <!-- HEADER SECTION -->
+        <header class="dashboard-header glass-card" id="header-section">
+            <div class="header-logo-title">
+                <div class="icon-wrapper plant-icon-pulse">
+                    <i data-lucide="sprout" class="icon-green"></i>
+                </div>
+                <div class="header-text">
+                    <h1>Smart Plant Watering System</h1>
+                    <p class="subtitle">IoT Monitoring using ESP32 and ThingSpeak</p>
+                </div>
+            </div>
+            
+            <div class="header-status-panel">
+                <button class="toggle-mode-btn" id="btn-toggle-demo" title="Toggle Demo / Live API mode">
+                    <i data-lucide="monitor-play" class="inline-icon"></i> Switch to Demo
+                </button>
+                <div class="status-badge" id="demo-badge" title="Toggles mock data vs ThingSpeak data">
+                    <span class="status-pulse pulse-orange"></span>
+                    <span class="status-text">Demo Mode</span>
+                </div>
+                <div class="status-badge" id="conn-status">
+                    <span class="status-pulse pulse-green" id="conn-dot"></span>
+                    <span class="status-text" id="conn-text">Connected</span>
+                </div>
+                <div class="timestamp-box">
+                    <span class="label">Updated:</span>
+                    <span class="val" id="last-updated">Never</span>
+                </div>
+                <div id="loading-indicator" class="loading-spinner hidden" title="Fetching IoT updates..."></div>
+            </div>
+        </header>
+
+        <!-- MAIN DASHBOARD CONTENT -->
+        <main class="dashboard-grid">
+            
+            <!-- LEFT PANEL: SENSOR CARDS -->
+            <section class="metrics-grid" aria-label="Sensor Metrics">
+                
+                <!-- Card 1: Soil Moisture Percentage -->
+                <div class="metric-card glass-card sensor-moisture-card" id="moisture-card">
+                    <div class="metric-header">
+                        <div class="metric-title-group">
+                            <i data-lucide="droplet" class="icon-blue"></i>
+                            <h3>Soil Moisture</h3>
+                        </div>
+                        <span class="sensor-id">Field 3</span>
+                    </div>
+                    
+                    <div class="gauge-container">
+                        <svg class="circular-gauge" viewBox="0 0 100 100">
+                            <!-- Track Circle -->
+                            <circle class="gauge-track" cx="50" cy="50" r="42" stroke-width="8"></circle>
+                            <!-- Fill Circle -->
+                            <circle class="gauge-fill gauge-fill-moisture" id="gauge-moisture-fill" cx="50" cy="50" r="42" stroke-width="8" stroke-dasharray="263.8" stroke-dashoffset="263.8"></circle>
+                        </svg>
+                        <div class="gauge-value" id="val-moisture">0%</div>
+                    </div>
+                    
+                    <div class="metric-info">
+                        <span class="status-pill status-healthy" id="moisture-status-pill">Normal</span>
+                    </div>
+                </div>
+
+                <!-- Card 2: Temperature in °C -->
+                <div class="metric-card glass-card sensor-temp-card" id="temp-card">
+                    <div class="metric-header">
+                        <div class="metric-title-group">
+                            <i data-lucide="thermometer" class="icon-red"></i>
+                            <h3>Temperature</h3>
+                        </div>
+                        <span class="sensor-id">Field 1</span>
+                    </div>
+                    
+                    <div class="temp-gauge-container">
+                        <div class="temp-bar-outer">
+                            <div class="temp-bar-fill" id="temp-fill" style="height: 0%;"></div>
+                        </div>
+                        <div class="temp-display">
+                            <div class="temp-number" id="val-temp">0.0<span class="unit">°C</span></div>
+                            <span class="temp-label">Ambient Temp</span>
+                        </div>
+                    </div>
+                    
+                    <div class="metric-info">
+                        <span class="status-pill status-normal" id="temp-status-pill">Normal</span>
+                    </div>
+                </div>
+
+                <!-- Card 3: Humidity in % -->
+                <div class="metric-card glass-card sensor-humidity-card" id="humidity-card">
+                    <div class="metric-header">
+                        <div class="metric-title-group">
+                            <i data-lucide="wind" class="icon-teal"></i>
+                            <h3>Air Humidity</h3>
+                        </div>
+                        <span class="sensor-id">Field 2</span>
+                    </div>
+                    
+                    <div class="humidity-radial-container">
+                        <div class="humidity-liquid-cup">
+                            <div class="humidity-wave" id="humidity-wave" style="transform: translateY(100%);"></div>
+                            <div class="humidity-val-overlay" id="val-humidity">0%</div>
+                        </div>
+                    </div>
+                    
+                    <div class="metric-info">
+                        <span class="status-pill status-normal" id="humidity-status-pill">Normal</span>
+                    </div>
+                </div>
+
+                <!-- Card 4: Pump Status -->
+                <div class="metric-card glass-card sensor-pump-card" id="pump-card">
+                    <div class="metric-header">
+                        <div class="metric-title-group">
+                            <i data-lucide="zap" class="icon-orange"></i>
+                            <h3>Water Pump</h3>
+                        </div>
+                        <span class="sensor-id">Field 4</span>
+                    </div>
+                    
+                    <div class="pump-indicator-container">
+                        <div class="pump-glow-ring" id="pump-glow">
+                            <div class="pump-icon-inner">
+                                <i data-lucide="waves" class="pump-rotating-icon" id="pump-icon"></i>
+                            </div>
+                        </div>
+                        <div class="pump-state-text" id="val-pump">OFF</div>
+                    </div>
+                    
+                    <div class="metric-info">
+                        <span class="status-pill pump-status-pill" id="pump-status-pill">System Idle</span>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- RIGHT PANEL: CONTROLS & CHARTS -->
+            <section class="controls-charts-panel">
+                
+                <!-- THINGSPEAK SYNC CONSOLE -->
+                <div class="sync-console-box glass-card" id="sync-console-section">
+                    <div class="sync-console-header">
+                        <div class="section-title">
+                            <i data-lucide="refresh-cw" class="section-icon" id="sync-icon-header"></i>
+                            <h2>ThingSpeak Sync Console</h2>
+                        </div>
+                        <button class="sync-now-btn" id="btn-sync-now" title="Fetch live data now">
+                            <i data-lucide="refresh-cw" id="btn-sync-icon" class="btn-icon"></i>
+                            <span>Sync Now</span>
+                        </button>
+                    </div>
+                    
+                    <div class="sync-info-grid">
+                        <div class="sync-stat-item">
+                            <span class="sync-stat-label">Sync Status</span>
+                            <span class="status-pill status-normal" id="sync-badge-status">Checking...</span>
+                        </div>
+                        <div class="sync-stat-item">
+                            <span class="sync-stat-label">Success Count</span>
+                            <span class="sync-stat-value" id="sync-success-count">0</span>
+                        </div>
+                        <div class="sync-stat-item">
+                            <span class="sync-stat-label">Fail Count</span>
+                            <span class="sync-stat-value" id="sync-fail-count">0</span>
+                        </div>
+                        <div class="sync-stat-item">
+                            <span class="sync-stat-label">Latest Feed ID</span>
+                            <span class="sync-stat-value" id="sync-entry-id">--</span>
+                        </div>
+                    </div>
+
+                    <div class="console-log-wrapper">
+                        <div class="console-log-header">
+                            <span>Live Integration Log</span>
+                            <button class="clear-logs-btn" id="btn-clear-logs">Clear Logs</button>
+                        </div>
+                        <div class="console-log-area" id="sync-console-log">
+                            <div class="log-line log-info">[12:00:00] Initializing ThingSpeak sync console...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CONTROL SECTION -->
+                <div class="control-box glass-card" id="control-section">
+                    <div class="section-title">
+                        <i data-lucide="sliders" class="section-icon"></i>
+                        <h2>System Controls</h2>
+                    </div>
+                    
+                    <div class="controls-content-grid">
+                        <!-- Mode Toggle -->
+                        <div class="control-card">
+                            <span class="control-label">Operation Mode</span>
+                            <div class="toggle-switch-wrapper">
+                                <span class="toggle-mode-label" id="label-mode-auto">Auto</span>
+                                <label class="switch">
+                                    <input type="checkbox" id="mode-toggle" checked>
+                                    <span class="slider-toggle round"></span>
+                                </label>
+                                <span class="toggle-mode-label" id="label-mode-manual">Manual</span>
+                            </div>
+                            <p class="control-help" id="mode-description">
+                                Auto Mode: Water activates when moisture drops below threshold.
+                            </p>
+                        </div>
+                        
+                        <!-- Pump Manual Trigger -->
+                        <div class="control-card">
+                            <span class="control-label">Manual Override</span>
+                            <button class="pump-btn disabled" id="btn-pump-toggle" disabled>
+                                <i data-lucide="power" class="btn-icon"></i>
+                                <span id="btn-pump-text">PUMP ON</span>
+                            </button>
+                            <p class="control-help">
+                                Only available in Manual Mode.
+                            </p>
+                        </div>
+
+                        <!-- Threshold Slider -->
+                        <div class="control-card slider-control-card">
+                            <div class="slider-header">
+                                <span class="control-label">Moisture Threshold</span>
+                                <span class="slider-value" id="val-threshold">45%</span>
+                            </div>
+                            <input type="range" min="10" max="90" value="45" class="custom-slider" id="moisture-threshold">
+                            <div class="slider-scale">
+                                <span>10% (Dry)</span>
+                                <span>50%</span>
+                                <span>90% (Wet)</span>
+                            </div>
+                            <p class="control-help">
+                                Water turns on if moisture &lt; threshold. Turns off if moisture &gt; 75%.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CHARTS SECTION -->
+                <div class="charts-box glass-card" id="charts-section">
+                    <div class="charts-header">
+                        <div class="section-title">
+                            <i data-lucide="trending-up" class="section-icon"></i>
+                            <h2>System Analytics &amp; History</h2>
+                        </div>
+                        <div class="chart-tab-controls">
+                            <button class="chart-tab-btn active" data-chart="moisture">Moisture</button>
+                            <button class="chart-tab-btn" data-chart="temp">Temperature</button>
+                            <button class="chart-tab-btn" data-chart="humidity">Humidity</button>
+                        </div>
+                    </div>
+
+                    <!-- Containers for Chart.js canvases -->
+                    <div class="charts-container">
+                        <div class="chart-canvas-wrapper" id="chart-moisture-wrapper">
+                            <canvas id="chart-moisture"></canvas>
+                        </div>
+                        <div class="chart-canvas-wrapper hidden" id="chart-temp-wrapper">
+                            <canvas id="chart-temp"></canvas>
+                        </div>
+                        <div class="chart-canvas-wrapper hidden" id="chart-humidity-wrapper">
+                            <canvas id="chart-humidity"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ADVANCED ANALYTICS SECTION -->
+                <div class="analytics-hub-box glass-card" id="analytics-hub-section">
+                    <div class="analytics-hub-header">
+                        <div class="section-title">
+                            <i data-lucide="bar-chart-3" class="section-icon"></i>
+                            <h2>Advanced IoT Analytics Hub</h2>
+                        </div>
+                    </div>
+                    
+                    <div class="analytics-charts-grid">
+                        <!-- 1. Temp & Humidity Trend -->
+                        <div class="analytics-chart-card">
+                            <h3>Temperature &amp; Humidity Trend</h3>
+                            <div class="chart-container-large">
+                                <canvas id="chart-temp-humid-trend"></canvas>
+                            </div>
+                        </div>
+                        
+                        <!-- 2. Temp vs Moisture Scatter -->
+                        <div class="analytics-chart-card">
+                            <h3>Temperature vs. Soil Moisture</h3>
+                            <div class="chart-container-large">
+                                <canvas id="chart-temp-moisture-scatter"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- 3. Water Usage Distribution -->
+                        <div class="analytics-chart-card">
+                            <h3>Water Usage Distribution</h3>
+                            <div class="chart-container-large">
+                                <canvas id="chart-water-usage"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- 4. Manual vs Auto Watering -->
+                        <div class="analytics-chart-card">
+                            <h3>Manual vs. Automatic Watering</h3>
+                            <div class="chart-container-large">
+                                <canvas id="chart-mode-distribution"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- 5. Daily Pump Activation Frequency -->
+                        <div class="analytics-chart-card">
+                            <h3>Daily Pump Activation Frequency</h3>
+                            <div class="chart-container-large">
+                                <canvas id="chart-pump-frequency"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- 6. Environmental Correlation -->
+                        <div class="analytics-chart-card">
+                            <h3>Environmental Correlation (Impact on Pump)</h3>
+                            <div class="chart-container-large">
+                                <canvas id="chart-env-correlation"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+
+        </main>
+
+        <!-- ALERTS SECTION -->
+        <footer class="alerts-panel glass-card" id="alerts-section">
+            <div class="alerts-header">
+                <div class="section-title">
+                    <i data-lucide="bell" class="section-icon pulse-red"></i>
+                    <h2>System Status Notifications</h2>
+                </div>
+                <button class="clear-alerts-btn" id="btn-clear-alerts">Clear All</button>
+            </div>
+            <div class="alerts-list" id="alerts-list">
+                <!-- Notifications dynamically added here -->
+                <div class="empty-alerts-placeholder" id="no-alerts-msg">
+                    <i data-lucide="check-circle" class="placeholder-icon"></i>
+                    <p>All systems operating within normal parameters.</p>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Script file -->
+    <script src="app.js"></script>
+</body>
+</html>
